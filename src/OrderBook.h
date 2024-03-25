@@ -97,19 +97,23 @@ public:
 
     struct PriceLevel
     {
-        double price_aggressive;
-        size_t volume_aggressive;
+        // The total volume for a specific buy price
+        double buy_price = 0.0;
+        size_t buy_vol   = 0;
 
-        double price_passive;
-        size_t volume_passive;
+        // The total volume for a specific sell price
+        double sell_price = 0.0;
+        size_t sell_vol   = 0;
+
+        auto operator<=>(const PriceLevel&) const = default;
     };
 
-    /** TODO: return data structure instead of string
+    /**
      * @brief Get the Price Levels object
      * 
      * @return std::vector< std::string > 
      */
-    std::vector< std::string > GetPriceLevels();
+    std::vector< PriceLevel > GetPriceLevels();
     
         void PrintOrderBook();
 

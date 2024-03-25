@@ -247,16 +247,16 @@ std::vector< std::pair<size_t, std::string> > OrderBook::GetListOfTrades()
 }
 
 
-std::vector< std::string > OrderBook::GetPriceLevels()
+std::vector< OrderBook::PriceLevel > OrderBook::GetPriceLevels()
 {
-    std::vector< std::string > result;
+    std::vector< PriceLevel > result;
 
     auto itBuy  = mBuyQueue.begin();
     auto itSell = mSellQueue.begin();
 
     while( itBuy != mBuyQueue.end() || itSell != mSellQueue.end() )
     {
-        std::string level;
+        PriceLevel level;
 
         if( itBuy != mBuyQueue.end() )
         {
@@ -266,13 +266,10 @@ std::vector< std::string > OrderBook::GetPriceLevels()
                 total_vol += order.vol;
             }
 
-            level += fts(itBuy->first) + "," + std::to_string(total_vol) + ",";
+            level.buy_price = itBuy->first;
+            level.buy_vol   = total_vol;
 
             ++itBuy;
-        }
-        else
-        {
-            level += ",,";
         }
 
         if( itSell != mSellQueue.end() )
@@ -282,14 +279,11 @@ std::vector< std::string > OrderBook::GetPriceLevels()
             {
                 total_vol += order.vol;
             }
-            
-            level += fts(itSell->first) + "," + std::to_string(total_vol);
+
+            level.sell_price = itSell->first;
+            level.sell_vol   = total_vol;
 
             ++itSell;
-        }
-        else
-        {
-            level += ",";
         }
 
         result.push_back(level);
