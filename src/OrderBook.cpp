@@ -1,32 +1,5 @@
 #include "OrderBook.h"
 
-//TODO: use dependency injection for this!! create two classes, one thread safe (maybe atomics? look into it!!) and a normal one.
-size_t OrderBook::mTradeId { 0 }; // NOTE: could overflow so depending on use, it might have to be done another way or reset in a controlled way.
-
-std::string remove_zeros(std::string& numberstring);
-std::string fts(double number);
-
-
-std::string remove_zeros(std::string& numberstring)
-{
-    auto it = numberstring.end() - 1;
-    while(*it == '0') {
-        numberstring.erase(it);
-        it = numberstring.end() - 1;
-    }
-    if(*it == '.') numberstring.erase(it);
-    return numberstring;
-}
-
-
-std::string fts(double number) // float to string
-{
-    std::stringstream ss{};
-    ss << std::setprecision(4) << std::fixed << std::showpoint << number;
-    std::string numberstring{ss.str()};
-    return remove_zeros(numberstring);
-}
-
 
 void OrderBook::PrintOrderBook()
 {
@@ -59,8 +32,9 @@ void OrderBook::PrintOrderBook()
 }
 
 
-OrderBook::OrderBook(const std::string& symbol) 
-: mSymbol { symbol }
+OrderBook::OrderBook(const std::string& symbol, UniqueIDGenerator& id_gen) 
+: mSymbol { symbol },
+  mIdGen  { id_gen }
 {
 
 }
@@ -131,8 +105,6 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
 
     Order& order = mTrades[id];
 
-    //TODO: remove this 'if' by just assigning a pointer to the correct queue? retard
-
 
     if( order.sell )
     {
@@ -200,9 +172,8 @@ void OrderBook::ExecuteOrders()
         const auto& [passiveOrder, aggressiveOrder] = buySideIsPassive ? std::tuple{ highestBuyOrder, lowestSellOrder } : std::tuple{ lowestSellOrder, highestBuyOrder };
 
         // store trade for later
-        ExecutedTrade trade { passiveOrder.price, tradeVol, aggressiveOrder.id, passiveOrder.id, mTradeId };
+        ExecutedTrade trade { passiveOrder.price, tradeVol, aggressiveOrder.id, passiveOrder.id, mIdGen.GenerateID() };
         mExecutedTrades.push_back( trade );
-        ++mTradeId;
 
         highestBuyOrder.vol -= tradeVol;
         lowestSellOrder.vol -= tradeVol;
@@ -230,20 +201,9 @@ void OrderBook::ExecuteOrders()
     }
 }
 
-std::vector< std::pair<size_t, std::string> > OrderBook::GetListOfTrades()
+const std::vector< OrderBook::ExecutedTrade >& OrderBook::GetListOfTrades()
 {
-    std::vector< std::pair<size_t, std::string> > result;
-
-    for( ExecutedTrade trade : mExecutedTrades )
-    {
-        result.emplace_back( trade.gId, mSymbol+","+
-                                        fts(trade.price)+","+
-                                        std::to_string(trade.volume)+","+
-                                        std::to_string(trade.aggressive_order_id)+","+
-                                        std::to_string(trade.passive_order_id) );
-    }
-
-    return result;
+    return mExecutedTrades;
 }
 
 

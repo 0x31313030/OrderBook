@@ -1,69 +1,38 @@
 #pragma once
-#include <string>
 #include <unordered_map>
 #include <queue>
 #include <map>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
 #include <string>
 #include <vector>
-#include <iterator>
-#include <algorithm>
+#include <iostream>
 
-
-
-/*
-struct FullOrder
-{
-    size_t      id;
-    Side        side;
-    double      price;
-    size_t      vol;
-    
-    void print()
-    {
-        std::cout << id << " | " << (int) side << " | " << price << " | " << vol << "\n";
-    }
-};
-
-struct AmendOrder
-{
-    size_t id;
-    double price;
-    size_t vol;
-    
-    void print()
-    {
-        std::cout << id << " | " << price << " | " << vol << "\n";
-    }
-};
-*/
-
+#include "UniqueIDGenerator.h"
 
 class OrderBook
 {
 public:
+
     enum class Side
     {
         BUY = 0,
         SELL
     };
 
+
     /**
-     * @brief Construct a new Order Book object 
+     * @brief Construct a new Order Book
      * 
-     * @param symbol_name The name of the order book
+     * @param symbol_name The name of the symbol the order book will be handling buy and sell orders for.
      */
-    OrderBook( const std::string& symbol_name );
+    OrderBook( const std::string& symbol_name, UniqueIDGenerator& id_gen );
 
 
     /**
      * @brief Insert either a buy or sell order in the order book.
      * 
-     * @param id     Unique id for this trade.
+     * @param id     Unique id for order. Id may not be the same as a previously inserted order. Must be handleded by caller!
      * @param side   Buy or sell side.
-     * @param price  Price to sell for or buy at. 
+     * @param price  Price to sell for or buy at.
      * @param vol    Number of units.
      */
     void Insert( const size_t id, const Side side, const double price, const size_t vol );
@@ -76,7 +45,7 @@ public:
      * @param price  The new price.
      * @param vol    The new volume.
      */
-    void Amend ( const size_t id, const double price, const size_t vol );
+    void Amend( const size_t id, const double price, const size_t vol );
 
 
     /**
@@ -85,33 +54,49 @@ public:
      * @param id  The id of the order to remove from the order book.
      */
     void Pull( const size_t id );
-    
 
-    /** TODO: return data structure instead of tuple and string
-     * @brief Gives the list matched trades
-     * 
-     * @return tuple with trade id and the trade as a comma seperated string (symbol, price, volume, aggressive order id, passive order id).
+
+    /**
+     * @brief Buy/Sell orders which have been matched by order book, resulting in a trade.
      */
-    std::vector< std::pair<size_t, std::string> > GetListOfTrades();
+    struct ExecutedTrade
+    {
+        double price;                // price which resulted in trade
+        size_t volume;               // number of units traded
+        size_t aggressive_order_id;  // The id of the order which triggered the trade. Can be sell or buy order type.
+        size_t passive_order_id;     // The id of the order which matched with the above order. Opposite order type of the above order.
+        size_t trade_id;             // The id of the trade. Can be used for ordering trades accross multiple order books.
+
+        auto operator<=>(const ExecutedTrade&) const = default;
+    };
+
+    /**
+     * @brief Returns the list of executed trades
+     */
+    const std::vector< OrderBook::ExecutedTrade >& GetListOfTrades();
 
 
+    /**
+     * @brief The closest sell and buy prices pair
+     */
     struct PriceLevel
     {
         // The total volume for a specific buy price
         double buy_price = 0.0;
         size_t buy_vol   = 0;
 
-        // The total volume for a specific sell price
+        // The total volume for the sell price closest to the above buy price
         double sell_price = 0.0;
         size_t sell_vol   = 0;
 
         auto operator<=>(const PriceLevel&) const = default;
     };
 
+
     /**
-     * @brief Get the Price Levels object
-     * 
-     * @return std::vector< std::string > 
+     * @brief Returns the price levels for all buy and sell prices in the order book.
+     *        If for a level, only one side has a bid, then the non bid side will be 
+     *        set to 0 volume and price. Sorted in increasing sell price.
      */
     std::vector< PriceLevel > GetPriceLevels();
     
@@ -120,13 +105,22 @@ public:
 
 private:
 
+    /**
+     * @brief Goes through the sell and buy orders and matches orders
+     */
+    void ExecuteOrders();
+
+
+    /**
+     * @brief Active order which is waiting to be matched with another order
+     */
     struct Order
     {
-        size_t id;     // global id
-        size_t intId;  // internal order book id
-        double price;
-        size_t vol;
-        bool   sell;
+        size_t id;     // global order id (the one from 'Insert()' method)
+        size_t intId;  // internal order book id (used for prioritization)
+        double price;  // price which will trigger a trade
+        size_t vol;    // number of units which will be traded
+        bool   sell;   // sell or buy order
 
         void print()
         {
@@ -134,16 +128,6 @@ private:
         }
     };
 
-    struct ExecutedTrade
-    {
-        double price;
-        size_t volume;
-        size_t aggressive_order_id;
-        size_t passive_order_id;
-        size_t gId;
-    };
-
-    void ExecuteOrders();
 
     std::unordered_map<size_t, Order> mTrades;
     std::vector<ExecutedTrade> mExecutedTrades;
@@ -154,6 +138,7 @@ private:
     const std::string mSymbol;
     static size_t mTradeId;
     size_t mIntId { 0 };
+    UniqueIDGenerator& mIdGen;
 };
 
 
