@@ -96,7 +96,6 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
             order.vol                    = vol;
         }
 
-        //PrintOrderBook();
         if( price_is_different )
         {
             ExecuteOrders( );

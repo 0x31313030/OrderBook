@@ -8,7 +8,9 @@ TEST(OrderBookTests, SimpleInsert)
     UniqueIDGenerator id_gen;
     OrderBook book("MSFT", id_gen);
 
-    book.Insert( 1, OrderBook::Side::BUY, 12.2, 5 );
+    /*
+    sym,  op,   id,     buy/sell side,     price,  vol */
+    book.Insert( 1, OrderBook::Side::BUY,  12.2,    5 );
 
     // check trades
     std::vector< OrderBook::ExecutedTrade > trades { book.GetListOfTrades() };
@@ -26,8 +28,10 @@ TEST(OrderBookTests, SimpleMatchWithAggressiveSell)
     UniqueIDGenerator id_gen;
     OrderBook book("MSFT", id_gen);
 
-    book.Insert( 1, OrderBook::Side::BUY,  12.2, 5 );
-    book.Insert( 2, OrderBook::Side::SELL, 12.1, 8 );
+    /*
+    sym,  op,   id,     buy/sell side,     price,  vol */
+    book.Insert( 1, OrderBook::Side::BUY,  12.2,    5 );
+    book.Insert( 2, OrderBook::Side::SELL, 12.1,    8 );
 
     // check trades
     std::vector< OrderBook::ExecutedTrade > trades = book.GetListOfTrades();
@@ -46,8 +50,10 @@ TEST(OrderBookTests, SimpleMatchWithAggressiveBuy)
     UniqueIDGenerator id_gen;
     OrderBook book("MSFT", id_gen);
 
-    book.Insert( 1, OrderBook::Side::SELL, 12.1, 8 );
-    book.Insert( 2, OrderBook::Side::BUY,  12.2, 5 );
+    /*
+    sym,  op,   id,     buy/sell side,     price,  vol */
+    book.Insert( 1, OrderBook::Side::SELL, 12.1,    8 );
+    book.Insert( 2, OrderBook::Side::BUY,  12.2,    5 );
 
     // check trades
     std::vector< OrderBook::ExecutedTrade > trades = book.GetListOfTrades();
@@ -66,6 +72,8 @@ TEST(OrderBookTests, SingleSymbolMultiInsertAndMultiMatch)
     UniqueIDGenerator id_gen;
     OrderBook book("MSFT", id_gen);
 
+    /*
+    sym,  op,   id,     buy/sell side,     price,  vol */
     book.Insert(8, OrderBook::Side::BUY,  14.235,  5 );
     book.Insert(6, OrderBook::Side::BUY,  14.235,  6 );
     book.Insert(7, OrderBook::Side::BUY,  14.235, 12 );
@@ -99,6 +107,8 @@ TEST(OrderBookTests, MultiSymbolMultiInsertAndMultiMatch)
     OrderBook goog("GOOG", id_gen);
     OrderBook tsla("TSLA", id_gen);
     
+    /*
+    sym,  op,   id,     buy/sell side,        price,  vol */
     msft.Insert(  1, OrderBook::Side::BUY,    0.3854,  5 );
     nvda.Insert(  2, OrderBook::Side::BUY,  412,      31 );
     nvda.Insert(  3, OrderBook::Side::BUY,  410.5,    27 );
@@ -144,6 +154,8 @@ TEST(OrderBookTests, InsertAndAmend)
     UniqueIDGenerator id_gen;
     OrderBook msft("MSFT", id_gen);
 
+    /*
+    sym,  op,   id,     buy/sell side,       price,  vol */
     msft.Insert(  1, OrderBook::Side::BUY,    45.95,  5 );
     msft.Insert(  2, OrderBook::Side::BUY,    45.95,  6 );
     msft.Insert(  3, OrderBook::Side::BUY,    45.95,  12 );
@@ -169,4 +181,51 @@ TEST(OrderBookTests, InsertAndAmend)
     ASSERT_EQ( 1, levels.size() );
     ASSERT_EQ( OrderBook::PriceLevel(45.95,16,  46,5), levels[0] );
 
+}
+
+
+TEST(OrderBookTests, TradeCorrectlyLoosesPricePriority)
+{
+    UniqueIDGenerator id_gen;        // An ID generator which is used for trades when orders are matched. Can be shared between multiple order books to have unique IDs across order books if needed.
+    OrderBook goog("GOOG", id_gen);
+    OrderBook tsla("TSLA", id_gen);
+
+    /*
+    sym,  op,   id,     buy/sell side,     price,  vol */
+    goog.Insert( 1, OrderBook::Side::BUY,  145.3,  17 );
+    tsla.Insert( 2, OrderBook::Side::SELL, 201.2, 121 );
+    tsla.Insert( 3, OrderBook::Side::SELL, 205.5,  68 );
+    goog.Insert( 4, OrderBook::Side::BUY,  136.1,  12 );
+    tsla.Insert( 5, OrderBook::Side::SELL, 205.5, 204 );  // Same price as order with ID '3', which has price priority.
+    tsla.Insert( 6, OrderBook::Side::SELL, 206.9,  41 );
+    goog.Insert( 7, OrderBook::Side::SELL, 146.2, 130 );
+    goog.Amend ( 4, 147.0, 50);                           // Change order with ID '4', to a price of 147, causing it to match with order '7'.
+    tsla.Pull  ( 6 );                                     // Remove order with ID '6'
+    tsla.Amend ( 3, 205.5, 75);                           // Change order with ID '3' causing it to loose its price priority with order '5'
+    tsla.Insert( 8, OrderBook::Side::BUY, 209.8,  300 );  // Matches with order IDs '2' and '5', exhausting all of '2' volume and leaving '5' with a volume of 25.
+
+
+    // get list of exectuted trades for 'GOOG'
+    const std::vector< OrderBook::ExecutedTrade >& googTrades = goog.GetListOfTrades();
+    ASSERT_EQ( 1, googTrades.size() );
+    ASSERT_EQ( OrderBook::ExecutedTrade(146.2, 50, 4, 7, 0), googTrades[0] );
+
+
+    // get list of exectuted trades for 'TSLA'
+    const std::vector< OrderBook::ExecutedTrade >& tslaTrades = tsla.GetListOfTrades(); // returns two trades { 201.6, 121, 8, 2, 1 } and { 205.5, 179, 8, 5, 2 }
+    ASSERT_EQ( 2, tslaTrades.size() );
+    ASSERT_EQ( OrderBook::ExecutedTrade(201.2, 121, 8, 2, 1), tslaTrades[0] );
+    ASSERT_EQ( OrderBook::ExecutedTrade(205.5, 179, 8, 5, 2), tslaTrades[1] );
+
+
+    // get price levels for 'GOOG'
+    std::vector<OrderBook::PriceLevel> googLevels { goog.GetPriceLevels() };
+    ASSERT_EQ( 1, googLevels.size() );
+    ASSERT_EQ( OrderBook::PriceLevel(145.3, 17, 146.2, 80), googLevels[0] );
+
+
+    // get price levels for 'TSLA'
+    std::vector<OrderBook::PriceLevel> tslaLevels { tsla.GetPriceLevels() };
+    ASSERT_EQ( 1, tslaLevels.size() );
+    ASSERT_EQ( OrderBook::PriceLevel(0,0, 205.5, 100), tslaLevels[0] );
 }
