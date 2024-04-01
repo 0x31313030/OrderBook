@@ -132,8 +132,10 @@ private:
     std::unordered_map<size_t, Order> mTrades;
     std::vector<ExecutedTrade> mExecutedTrades;
 
-    std::map< double, std::map<size_t, Order>                       > mSellQueue;
-    std::map< double, std::map<size_t, Order>, std::greater<double> > mBuyQueue;
+    std::map< double, std::map<size_t, Order> > mSellQueue;
+    std::map< double, std::map<size_t, Order> > mBuyQueue;
+
+    std::map< double, std::map<size_t, Order> >* mQueues[2] { &mBuyQueue, &mSellQueue };
 
     const std::string mSymbol;
     static size_t mTradeId;

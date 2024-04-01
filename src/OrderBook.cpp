@@ -46,14 +46,8 @@ void OrderBook::Insert( const size_t id, const Side side, const double price, co
 
     mTrades.insert( {order.id, order} );
 
-    if( order.sell )
-    {
-        mSellQueue[ order.price ].insert( {order.intId, order} );
-    }
-    else
-    {
-        mBuyQueue[ order.price ].insert( {order.intId, order} );
-    }
+    auto& queue = *mQueues[size_t(order.sell)];
+    queue[order.price].insert( {order.intId, order} );
 
     ExecuteOrders( );
 }
@@ -103,16 +97,7 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
     };
 
     Order& order = mTrades[id];
-
-
-    if( order.sell )
-    {
-        UpdateQueue( mSellQueue, order, price, vol );
-    }
-    else
-    {
-        UpdateQueue( mBuyQueue, order, price, vol );
-    }
+    UpdateQueue( *mQueues[ size_t(order.sell) ], order, price, vol );
 }
 
 
@@ -134,16 +119,7 @@ void OrderBook::Pull( const size_t id )
             }
         };
 
-
-        if( order.sell )
-        {
-            EraseOrderFromQueue(mSellQueue, order);
-        }
-        else
-        {
-            EraseOrderFromQueue(mBuyQueue, order);
-        }
-
+        EraseOrderFromQueue( *mQueues[ size_t(order.sell) ], order );
         mTrades.erase(it);
     }
 }
@@ -153,7 +129,7 @@ void OrderBook::ExecuteOrders()
 {
     while( !mBuyQueue.empty() && !mSellQueue.empty() )
     {
-        auto itHighestBuyPrices = mBuyQueue.begin();
+        auto itHighestBuyPrices = mBuyQueue.rbegin(); // reverse iterator because we want highest price first
         auto itLowestSellPrices = mSellQueue.begin();
 
         const double buyPrice   = itHighestBuyPrices->first;
@@ -184,7 +160,7 @@ void OrderBook::ExecuteOrders()
 
             if( itHighestBuyPrices->second.empty() )
             {
-                mBuyQueue.erase( itHighestBuyPrices );
+                mBuyQueue.erase( std::next(itHighestBuyPrices).base() );
             }
         }
 
@@ -210,14 +186,14 @@ std::vector< OrderBook::PriceLevel > OrderBook::GetPriceLevels()
 {
     std::vector< PriceLevel > result;
 
-    auto itBuy  = mBuyQueue.begin();
-    auto itSell = mSellQueue.begin();
+    auto itBuy  = mBuyQueue.crbegin();
+    auto itSell = mSellQueue.cbegin();
 
-    while( itBuy != mBuyQueue.end() || itSell != mSellQueue.end() )
+    while( itBuy != mBuyQueue.crend() || itSell != mSellQueue.cend() )
     {
         PriceLevel level;
 
-        if( itBuy != mBuyQueue.end() )
+        if( itBuy != mBuyQueue.crend() )
         {
             size_t total_vol = 0;
             for( auto [intId, order] : itBuy->second )
@@ -231,7 +207,7 @@ std::vector< OrderBook::PriceLevel > OrderBook::GetPriceLevels()
             ++itBuy;
         }
 
-        if( itSell != mSellQueue.end() )
+        if( itSell != mSellQueue.cend() )
         {
             size_t total_vol = 0;
             for( auto [intId, order] : itSell->second )

@@ -7,7 +7,5 @@ set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CTest)
 include(CPack)
 
-#export CMAKE_CXX_FLAGS=${CXXFLAGS}
-
 add_subdirectory(src)
 add_subdirectory(unit_tests)

@@ -63,6 +63,6 @@ cd OrderBook
 mkdir _build && cd _build
 cmake ..
 make
-./unit_tests/AssignmentTests
+./unit_tests/OrderBookTests
 
 ```
