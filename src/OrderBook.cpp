@@ -44,7 +44,7 @@ void OrderBook::Insert( const size_t id, const Side side, const double price, co
     Order order { id, mIntId, price, vol, Side::SELL == side };
     ++mIntId;
 
-    mTrades.insert( {order.id, order} );
+    mOrders.insert( {order.id, order} );
 
     auto& queue = *mQueues[size_t(order.sell)];
     queue[order.price].insert( {order.intId, order} );
@@ -84,7 +84,7 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
         }
         else
         {
-            // priority stays the same, only update vol
+            // priority stays the same, only update volume
             auto& order_map              = queue[order.price];
             order_map[order.intId].vol   = vol;
             order.vol                    = vol;
@@ -96,7 +96,7 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
         }
     };
 
-    Order& order = mTrades[id];
+    Order& order = mOrders[id];
     UpdateQueue( *mQueues[ size_t(order.sell) ], order, price, vol );
 }
 
@@ -104,7 +104,7 @@ void OrderBook::Amend( const size_t id, const double price, const size_t vol )
 
 void OrderBook::Pull( const size_t id )
 {
-    if( auto it = mTrades.find( id ); it != mTrades.end() )
+    if( auto it = mOrders.find( id ); it != mOrders.end() )
     {
         const Order& order = it->second;
 
@@ -120,7 +120,7 @@ void OrderBook::Pull( const size_t id )
         };
 
         EraseOrderFromQueue( *mQueues[ size_t(order.sell) ], order );
-        mTrades.erase(it);
+        mOrders.erase(it);
     }
 }
 

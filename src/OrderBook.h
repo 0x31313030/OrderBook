@@ -61,11 +61,11 @@ public:
      */
     struct ExecutedTrade
     {
-        double price;                // price which resulted in trade
-        size_t volume;               // number of units traded
+        double price;                // Price which resulted in trade.
+        size_t volume;               // Number of units traded.
         size_t aggressive_order_id;  // The id of the order which triggered the trade. Can be sell or buy order type.
         size_t passive_order_id;     // The id of the order which matched with the above order. Opposite order type of the above order.
-        size_t trade_id;             // The id of the trade. Can be used for ordering trades accross multiple order books.
+        size_t trade_id;             // The id of the trade. Can be used for ordering trades accross multiple order books depending on 'id_gen'.
 
         auto operator<=>(const ExecutedTrade&) const = default;
     };
@@ -129,18 +129,14 @@ private:
     };
 
 
-    std::unordered_map<size_t, Order> mTrades;
-    std::vector<ExecutedTrade> mExecutedTrades;
+    const std::string mSymbol;                               // Symbol of order book.
+    UniqueIDGenerator& mIdGen;                               // used for generating IDs for executed trades.
+    size_t mIntId { 0 };                                     // Used for giving orders 'time priority'.
+    std::unordered_map<size_t, Order> mOrders;               // Contains all sell and buy orders. Maps 'order id' -> 'order'. Used for looking up orders when doing 'Amend()' operations.
+    std::vector<ExecutedTrade> mExecutedTrades;              // Contains all matched orders which resulted in a trade.
 
-    std::map< double, std::map<size_t, Order> > mSellQueue;
-    std::map< double, std::map<size_t, Order> > mBuyQueue;
+    std::map< double, std::map<size_t, Order> > mSellQueue;  // All sell orders. Given a sell price, will return all active sell orders sorted after 'time priority'.
+    std::map< double, std::map<size_t, Order> > mBuyQueue;   // Same as 'mSellQueue' but for buy orders.
 
     std::map< double, std::map<size_t, Order> >* mQueues[2] { &mBuyQueue, &mSellQueue };
-
-    const std::string mSymbol;
-    static size_t mTradeId;
-    size_t mIntId { 0 };
-    UniqueIDGenerator& mIdGen;
 };
-
-
