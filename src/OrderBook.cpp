@@ -56,71 +56,67 @@ void OrderBook::Insert( const size_t id, const Side side, const double price, co
 
 void OrderBook::Amend( const size_t id, const double price, const size_t vol )
 {
-    // lambda helper function
-    auto UpdateQueue = [this](auto& queue, Order& order, const double price, const size_t vol )
-    {
-        bool price_is_different = ( price != order.price );
-        bool vol_increase       = ( vol   >  order.vol   );
-
-        const bool order_loses_time_priority = vol_increase || price_is_different;
-        if( order_loses_time_priority )
-        {
-            // update internal id of order and reinsert in map to give it lower priority
-            const double old_price = order.price;
-            auto& order_map = queue[old_price];
-            order_map.erase( order.intId );
-            order.intId = mIntId;
-            ++mIntId;
-
-            order.price = price;
-            order.vol   = vol;
-            
-            queue[order.price].insert( {order.intId, order} );
-
-            if( order_map.empty() )
-            {
-                queue.erase( old_price );
-            }
-        }
-        else
-        {
-            // priority stays the same, only update volume
-            auto& order_map              = queue[order.price];
-            order_map[order.intId].vol   = vol;
-            order.vol                    = vol;
-        }
-
-        if( price_is_different )
-        {
-            ExecuteOrders( );
-        }
-    };
-
     Order& order = mOrders[id];
-    UpdateQueue( *mQueues[ size_t(order.sell) ], order, price, vol );
+    auto&  queue = *mQueues[ size_t(order.sell) ];
+
+    bool price_is_different = ( price != order.price );
+    bool vol_increase       = ( vol   >  order.vol   );
+
+    const bool order_loses_time_priority = (vol_increase || price_is_different);
+    if( order_loses_time_priority )     // update internal id of order and reinsert in map to give it lower priority
+    {
+        // remove order from queue
+        auto price_map_it = queue.find(order.price);
+        price_map_it->second.erase( order.intId );
+
+        // update order
+        order.price = price;
+        order.vol   = vol;
+        order.intId = mIntId;
+        ++mIntId;
+        
+        // lower the priority by reinserting with new internal id
+        queue[order.price].insert( {order.intId, order} );
+
+        if( price_map_it->second.empty() )
+        {
+            queue.erase( price_map_it );
+        }
+    }
+    else
+    {
+        // priority stays the same, only update volume
+        auto& price_map              = queue[order.price];
+        price_map[order.intId].vol   = vol;
+        order.vol                    = vol;
+    }
+
+    if( price_is_different )
+    {
+        ExecuteOrders( );
+    }
 }
 
 
 
 void OrderBook::Pull( const size_t id )
 {
-    if( auto it = mOrders.find( id ); it != mOrders.end() )
+    if( auto order_it = mOrders.find( id ); order_it != mOrders.end() )
     {
-        const Order& order = it->second;
+        const Order& order = order_it->second;
 
-        auto EraseOrderFromQueue = [](auto& queue, const Order& order)
+        // delete order from sell/buy queue
+        auto& queue        = *mQueues[ size_t(order.sell) ];
+        auto  price_map_it = queue.find(order.price);
+        price_map_it->second.erase( order.intId );
+
+        // remove price map from sell/buy queue if no orders left at that price
+        if( price_map_it->second.empty() )
         {
-            auto& order_map = queue[order.price];
-            order_map.erase( order.intId );
+            queue.erase( price_map_it );
+        }
 
-            if( order_map.empty() )
-            {
-                queue.erase( order.price );
-            }
-        };
-
-        EraseOrderFromQueue( *mQueues[ size_t(order.sell) ], order );
-        mOrders.erase(it);
+        mOrders.erase(order_it);
     }
 }
 
@@ -129,16 +125,16 @@ void OrderBook::ExecuteOrders()
 {
     while( !mBuyQueue.empty() && !mSellQueue.empty() )
     {
-        auto itHighestBuyPrices = mBuyQueue.rbegin(); // reverse iterator because we want highest price first
-        auto itLowestSellPrices = mSellQueue.begin();
+        auto highestBuyPricesIt = mBuyQueue.rbegin(); // reverse iterator because we want highest price first
+        auto lowestSellPricesIt = mSellQueue.begin();
 
-        const double buyPrice   = itHighestBuyPrices->first;
-        const double sellPrice  = itLowestSellPrices->first;
+        const double buyPrice   = highestBuyPricesIt->first;
+        const double sellPrice  = lowestSellPricesIt->first;
 
         if( buyPrice < sellPrice ) { break; }
 
-        Order& highestBuyOrder  = itHighestBuyPrices->second.begin()->second;
-        Order& lowestSellOrder  = itLowestSellPrices->second.begin()->second;
+        Order& highestBuyOrder  = highestBuyPricesIt->second.begin()->second;
+        Order& lowestSellOrder  = lowestSellPricesIt->second.begin()->second;
 
         size_t tradeVol = std::min( highestBuyOrder.vol, lowestSellOrder.vol );
 
@@ -156,21 +152,21 @@ void OrderBook::ExecuteOrders()
         // remove order if no more volume
         if( 0 == highestBuyOrder.vol )
         {
-            itHighestBuyPrices->second.erase( itHighestBuyPrices->second.begin() );
+            highestBuyPricesIt->second.erase( highestBuyPricesIt->second.begin() );
 
-            if( itHighestBuyPrices->second.empty() )
+            if( highestBuyPricesIt->second.empty() )
             {
-                mBuyQueue.erase( std::next(itHighestBuyPrices).base() );
+                mBuyQueue.erase( std::next(highestBuyPricesIt).base() );
             }
         }
 
         if( 0 == lowestSellOrder.vol )
         {
-            itLowestSellPrices->second.erase( itLowestSellPrices->second.begin() );
+            lowestSellPricesIt->second.erase( lowestSellPricesIt->second.begin() );
 
-            if( itLowestSellPrices->second.empty() )
+            if( lowestSellPricesIt->second.empty() )
             {
-                mSellQueue.erase( itLowestSellPrices );
+                mSellQueue.erase( lowestSellPricesIt );
             }
         }
     }
